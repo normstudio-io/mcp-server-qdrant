@@ -84,6 +84,11 @@ class QdrantSettings(BaseSettings):
     local_path: str | None = Field(default=None, validation_alias="QDRANT_LOCAL_PATH")
     search_limit: int = Field(default=10, validation_alias="QDRANT_SEARCH_LIMIT")
     read_only: bool = Field(default=False, validation_alias="QDRANT_READ_ONLY")
+    check_compatibility: bool = Field(
+        default=True,
+        validation_alias="QDRANT_CHECK_COMPATIBILITY",
+        description="If False, skip client/server version check (use when server is 1.12.x and client is 1.17.x).",
+    )
 
     filterable_fields: list[FilterableField] | None = Field(default=None)
 

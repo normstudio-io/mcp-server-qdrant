@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import uuid
 from typing import Any
@@ -42,13 +43,17 @@ class QdrantConnector:
         embedding_provider: EmbeddingProvider,
         qdrant_local_path: str | None = None,
         field_indexes: dict[str, models.PayloadSchemaType] | None = None,
+        check_compatibility: bool = True,
     ):
         self._qdrant_url = qdrant_url.rstrip("/") if qdrant_url else None
         self._qdrant_api_key = qdrant_api_key
         self._default_collection_name = collection_name
         self._embedding_provider = embedding_provider
         self._client = AsyncQdrantClient(
-            location=qdrant_url, api_key=qdrant_api_key, path=qdrant_local_path
+            location=qdrant_url,
+            api_key=qdrant_api_key,
+            path=qdrant_local_path,
+            check_compatibility=check_compatibility,
         )
         self._field_indexes = field_indexes
 
@@ -83,12 +88,60 @@ class QdrantConnector:
             collection_name=collection_name,
             points=[
                 models.PointStruct(
-                    id=uuid.uuid4().hex,
+                    id=str(uuid.uuid4()),
                     vector={vector_name: embeddings[0]},
                     payload=payload,
                 )
             ],
         )
+
+    async def store_many(
+        self,
+        entries: list[Entry],
+        *,
+        collection_name: str | None = None,
+        deterministic_ids: bool = False,
+    ) -> None:
+        """
+        Store multiple entries in one batch (single embed call + single upsert).
+        :param entries: List of entries to store.
+        :param collection_name: Collection to use; defaults to default collection.
+        :param deterministic_ids: If True, use hash(source_url + chunk_index) as point id for dedup.
+        """
+        if not entries:
+            return
+        collection_name = collection_name or self._default_collection_name
+        assert collection_name is not None
+        await self._ensure_collection_exists(collection_name)
+
+        texts = [e.content for e in entries]
+        embeddings = await self._embedding_provider.embed_documents(texts)
+        vector_name = self._embedding_provider.get_vector_name()
+
+        points = []
+        for i, (entry, vector) in enumerate(zip(entries, embeddings)):
+            if deterministic_ids and entry.metadata:
+                src = entry.metadata.get("source_url", "")
+                idx = entry.metadata.get("chunk_index", i)
+                # Qdrant requires string IDs to be valid UUIDs.
+                # Generate a deterministic UUID from the source and index.
+                hash_hex = hashlib.sha256(f"{src}|{idx}".encode()).hexdigest()
+                point_id = str(uuid.UUID(hex=hash_hex[:32]))
+            else:
+                point_id = str(uuid.uuid4())
+            payload = {"document": entry.content, METADATA_PATH: entry.metadata or {}}
+            points.append(
+                models.PointStruct(
+                    id=point_id,
+                    vector={vector_name: vector},
+                    payload=payload,
+                )
+            )
+        await self._client.upsert(
+            collection_name=collection_name,
+            points=points,
+        )
+        logger.info("Upserted %d points to collection %s", len(points), collection_name)
 
     async def search(
         self,

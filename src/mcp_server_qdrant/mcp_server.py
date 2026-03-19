@@ -72,6 +72,7 @@ class QdrantMCPServer(FastMCP):
             self.embedding_provider,
             qdrant_settings.local_path,
             make_indexes(qdrant_settings.filterable_fields_dict()),
+            check_compatibility=qdrant_settings.check_compatibility,
         )
 
         super().__init__(name=name, instructions=instructions, **settings)
