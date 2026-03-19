@@ -213,7 +213,6 @@ class QdrantConnector:
             )
 
             # Create payload indexes if configured
-
             if self._field_indexes:
                 for field_name, field_type in self._field_indexes.items():
                     await self._client.create_payload_index(
@@ -221,3 +220,16 @@ class QdrantConnector:
                         field_name=field_name,
                         field_schema=field_type,
                     )
+        else:
+            # Collection already exists: ensure payload indexes exist (e.g. after adding new fields)
+            if self._field_indexes:
+                for field_name, field_type in self._field_indexes.items():
+                    try:
+                        await self._client.create_payload_index(
+                            collection_name=collection_name,
+                            field_name=field_name,
+                            field_schema=field_type,
+                        )
+                    except Exception as e:
+                        # Index may already exist; log and continue
+                        logger.debug("Payload index %s: %s", field_name, e)

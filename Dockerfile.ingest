@@ -1,0 +1,21 @@
+# One-off ingest: Python 3.11 + deps (wheels work; no Rust).
+# Build from MCP-Hub: docker build -f qdrant-mcp/Dockerfile.ingest -t mcp-ingest .
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Context = MCP-Hub root
+COPY qdrant-mcp/pyproject.toml qdrant-mcp/README.md ./
+COPY qdrant-mcp/src/ ./src/
+RUN pip install --no-cache-dir -e .
+
+COPY qdrant-mcp/scripts/ ./scripts/
+ENV QDRANT_URL=""
+ENV QDRANT_CHECK_COMPATIBILITY="false"
+ENV EMBEDDING_PROVIDER="fastembed"
+ENV COLLECTION_NAME="ly-frontend-kb"
+
+# Sources dir must be mounted at /data/vector-sources/private/learningyard
+CMD ["python", "scripts/ingest_learningyard.py", \
+     "--sources-dir", "/data/vector-sources/private/learningyard", \
+     "--collection", "ly-frontend-kb"]

@@ -53,6 +53,7 @@ def _payload_source(tool_source: str | None) -> str:
 # Payload indexes for ly-frontend-kb (align with docs/50-rag-qdrant-vector-index.md § Metadata)
 LY_FRONTEND_KB_INDEXES = {
     f"{METADATA_PATH}.source_url": models.PayloadSchemaType.KEYWORD,
+    f"{METADATA_PATH}.source_file": models.PayloadSchemaType.KEYWORD,
     f"{METADATA_PATH}.source": models.PayloadSchemaType.KEYWORD,
     f"{METADATA_PATH}.category": models.PayloadSchemaType.KEYWORD,
     f"{METADATA_PATH}.subcategory": models.PayloadSchemaType.KEYWORD,
@@ -65,6 +66,7 @@ LY_FRONTEND_KB_INDEXES = {
     f"{METADATA_PATH}.chunk_index": models.PayloadSchemaType.INTEGER,
     f"{METADATA_PATH}.quality_score": models.PayloadSchemaType.FLOAT,
     f"{METADATA_PATH}.fact_checked": models.PayloadSchemaType.BOOL,
+    f"{METADATA_PATH}.tech_stack": models.PayloadSchemaType.KEYWORD,
 }
 
 
@@ -125,9 +127,14 @@ def collect_entries(sources_dir: Path) -> list[Entry]:
             payload = dict(meta)
             payload["chunk_index"] = i
             payload["source_url"] = meta.get("source_url", str(path))
+            payload["source_file"] = path.name
             payload["source"] = _payload_source(meta.get("tool_source"))
             payload["project_id"] = meta.get("project_id", "learningyard")
             payload["visibility"] = meta.get("visibility", "private")
+            # tech_stack from frontmatter (may be string or list-like string)
+            if "tech_stack" in meta and meta["tech_stack"]:
+                ts = meta["tech_stack"]
+                payload["tech_stack"] = ts if isinstance(ts, str) else str(ts)
             # Optional per docs/50-rag-qdrant-vector-index.md
             if "quality_score" in meta:
                 try:
